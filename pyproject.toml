@@ -1,0 +1,23 @@
+[project]
+name = "mojo-furl"
+version = "0.1.0"
+description = "Mojo-accelerated URL parsing and manipulation"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Lee Penkman", email = "leepenkman@gmail.com" }]
+dependencies = ["orderedmultidict>=1.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "python" }
+include-package-data = true
+
+[tool.setuptools.package-data]
+mojofurl = ["libmojo-furl.so"]
+
+[tool.setuptools.packages.find]
+where = ["python"]
