@@ -244,6 +244,35 @@ def decode_part(src: BPtr, begin: Int, end: Int, dst: BPtr, dst_begin: Int) -> I
     return j
 
 
+def decode_query_pair(
+    src: BPtr,
+    pair_start: Int,
+    boundary: Int,
+    equal: Int,
+    dst: BPtr,
+    dst_pos: Int,
+    spans: IPtr,
+    pair_index: Int,
+) -> Int:
+    var key_end = boundary if equal < 0 else equal
+    var key_start_out = dst_pos
+    var next_dst_pos = decode_part(src, pair_start, key_end, dst, dst_pos)
+    spans[pair_index * 4] = Int64(key_start_out)
+    spans[pair_index * 4 + 1] = Int64(next_dst_pos - key_start_out)
+
+    if equal < 0:
+        spans[pair_index * 4 + 2] = Int64(next_dst_pos)
+        spans[pair_index * 4 + 3] = -1
+    else:
+        var value_start_out = next_dst_pos
+        next_dst_pos = decode_part(
+            src, equal + 1, boundary, dst, next_dst_pos
+        )
+        spans[pair_index * 4 + 2] = Int64(value_start_out)
+        spans[pair_index * 4 + 3] = Int64(next_dst_pos - value_start_out)
+    return next_dst_pos
+
+
 @export("mf_query_decode")
 def mf_query_decode(
     src_addr: Int,
@@ -268,32 +297,38 @@ def mf_query_decode(
     var pair_start = 0
     var pair_index = 0
     var dst_pos = 0
+    var equal = -1
+    var boundary = 0
+    comptime W = simd_width_of[DType.float64]()
 
-    for boundary in range(n + 1):
-        if boundary == n or src[boundary] == 38:
+    while boundary < n:
+        if boundary + W <= n:
+            var chars = src.load[width=W](boundary)
+            var delimiters = (
+                chars.eq(UInt8(38)).cast[DType.uint8]()
+                + chars.eq(UInt8(61)).cast[DType.uint8]()
+            )
+            if delimiters.reduce_add() == 0:
+                boundary += W
+                continue
+        var c = src[boundary]
+        if c == 61 and equal < 0:
+            equal = boundary
+        elif c == 38:
             if (pair_index + 1) > spans_len / 4:
                 return -2
-            var equal = -1
-            for i in range(pair_start, boundary):
-                if src[i] == 61:
-                    equal = i
-                    break
-
-            var key_end = boundary if equal < 0 else equal
-            var key_start_out = dst_pos
-            dst_pos = decode_part(src, pair_start, key_end, dst, dst_pos)
-            spans[pair_index * 4] = Int64(key_start_out)
-            spans[pair_index * 4 + 1] = Int64(dst_pos - key_start_out)
-
-            if equal < 0:
-                spans[pair_index * 4 + 2] = Int64(dst_pos)
-                spans[pair_index * 4 + 3] = -1
-            else:
-                var value_start_out = dst_pos
-                dst_pos = decode_part(src, equal + 1, boundary, dst, dst_pos)
-                spans[pair_index * 4 + 2] = Int64(value_start_out)
-                spans[pair_index * 4 + 3] = Int64(dst_pos - value_start_out)
-
+            dst_pos = decode_query_pair(
+                src, pair_start, boundary, equal, dst, dst_pos, spans, pair_index
+            )
             pair_index += 1
             pair_start = boundary + 1
+            equal = -1
+        boundary += 1
+
+    if (pair_index + 1) > spans_len / 4:
+        return -2
+    _ = decode_query_pair(
+        src, pair_start, n, equal, dst, dst_pos, spans, pair_index
+    )
+    pair_index += 1
     return pair_index

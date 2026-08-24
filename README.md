@@ -82,11 +82,11 @@ CPython 3.13.14. Times are the best of three warmed runs. A speedup above
 
 | Case | mojo-furl | furl 2.1.4 | Speedup |
 |---|---:|---:|---:|
-| quote_plus, 3.7M chars | 19.42 ms | 180.25 ms | 9.28x |
-| unquote_plus, 5.3M chars | 23.70 ms | 351.27 ms | 14.82x |
-| urlsplit, 1.2M-char URL | 1.31 ms | 4.94 ms | 3.77x |
-| Query parse, 100k pairs | 296.81 ms | 1949.59 ms | 6.57x |
-| urlsplit_many, 100k URLs | 312.66 ms | 1470.03 ms | 4.70x |
+| quote_plus, 3.7M chars | 16.30 ms | 178.93 ms | 10.98x |
+| unquote_plus, 5.3M chars | 19.40 ms | 290.58 ms | 14.98x |
+| urlsplit, 1.2M-char URL | 1.18 ms | 4.47 ms | 3.78x |
+| Query parse, 100k pairs | 272.72 ms | 1012.38 ms | 3.71x |
+| urlsplit_many, 100k URLs | 228.57 ms | 935.81 ms | 4.09x |
 
 These numbers include UTF-8 conversion, ctypes calls, result construction,
 and ordered-multidict insertion. They are workload-specific; short individual
@@ -110,10 +110,12 @@ are passed zero-copy to Mojo, then converted to Python strings and
 lengths, rejects null or inconsistent ranges, and has its status and returned
 length checked by Python before output is consumed.
 
-Query decoding is a single pass. Mojo records key and value spans after
-decoding `%HH` and `+`, while Python inserts the resulting objects into an
-`omdict1D`. Bulk splitting packs URL bytes contiguously and supplies an offset
-array, so one FFI call produces nine component offsets per URL.
+Query decoding is a single pass. SIMD blocks locate `&` and the first `=` while
+skipping delimiter-free bytes, and a scalar tail handles the remainder. Mojo
+records key and value spans after decoding `%HH` and `+`, while Python inserts
+the resulting objects into an `omdict1D`. Bulk splitting packs URL bytes
+contiguously and supplies an offset array, so one FFI call produces nine
+component offsets per URL.
 
 The test suite compares behavior directly with installed furl 2.1.4, including
 encoded Unicode, repeated and bare query keys, custom schemes, IPv6, fragments,

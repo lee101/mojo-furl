@@ -136,6 +136,13 @@ def test_query_decode_simd_tail(tail):
     assert got.params.allitems() == expected.params.allitems()
 
 
+@pytest.mark.parametrize("tail", range(18))
+def test_query_delimiter_scan_simd_tail(tail):
+    value = ("k" * tail) + "=a=b=c&" + ("v" * tail) + "&=tail"
+    got, expected = mojo.Query(value), upstream.Query(value)
+    assert got.params.allitems() == expected.params.allitems()
+
+
 def test_query_ordered_multivalue_mutations_match_upstream():
     got, expected = mojo.Query("a=1&a=2&b=3"), upstream.Query("a=1&a=2&b=3")
     for method, value in [
